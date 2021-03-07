@@ -167,6 +167,9 @@ def extract_images_from_pdf(
         include_page_number: bool = False,
         as_numpy_images: bool = True,
 ):
+    # NOTE:
+    # a more powerful version is available here:
+    # https://gist.github.com/gstorer/f6a9f1dfe41e8e64dcf58d07afa9ab2a
 
     pdf_file = PyPDF4.PdfFileReader(open(pdf_path, "rb"))
 
