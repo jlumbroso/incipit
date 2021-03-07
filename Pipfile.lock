@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "abaf08e896cdef64fb91ee604b93e59434456159a2f4cd17bcdaeb82a3b6373e"
+            "sha256": "6f8937fc108d7a070b7b36d868e61015b280f08e37815d09e6d733fc0b61c3c0"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -21,7 +21,7 @@
                 "sha256:93aa393e9d6c54c5cd570ccadd8edad61ea0c4b9ea7a01409020c9aa019eb442",
                 "sha256:dd83cd4b5b460958838f6eb3000c660b1f9caf2a5b1de4264e941512f603258a"
             ],
-            "markers": "platform_system == 'Darwin'",
+            "markers": "sys_platform == 'darwin'",
             "version": "==0.1.2"
         },
         "backcall": {
@@ -304,6 +304,13 @@
                 "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"
             ],
             "version": "==2.4.7"
+        },
+        "pypdf4": {
+            "hashes": [
+                "sha256:7c932441146d205572f96254d53c79ea2c30c9e11df55a5cf87e056c7b3d7f89"
+            ],
+            "index": "pypi",
+            "version": "==1.27.0"
         },
         "pytesseract": {
             "hashes": [

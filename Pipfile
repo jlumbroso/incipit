@@ -11,6 +11,7 @@ ipykernel = "*"
 pillow = "*"
 matplotlib = "*"
 pytesseract = "*"
+pypdf4 = "*"
 
 [requires]
 python_version = "3.8"
