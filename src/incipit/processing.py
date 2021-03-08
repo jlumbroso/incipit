@@ -20,6 +20,7 @@ Region = collections.namedtuple(
 
 # REGION_BOX_COLOR = (87, 177, 130)
 REGION_BOX_COLOR = (109, 177, 84)
+REGION_BOX_COLOR_IGNORE = (200, 161, 74)
 REGION_BOX_THICKNESS = 3
 REGION_BOX_FONT = cv2.FONT_HERSHEY_SIMPLEX
 REGION_BOX_FONT_COLOR = (87, 177, 130)
@@ -47,14 +48,9 @@ def detect_regions_from_image(
         image_path: typing.Optional[str] = None,
         region_size_threshold: typing.Optional[float] = None,
         number_from: typing.Optional[int] = None,
+        callback_skip_region: typing.Optional = None,
+        callback_ignore_region: typing.Optional = None,
 ) -> typing.Tuple[Image, typing.List[Region]]:
-    """
-
-    :param image:
-    :param image_path:
-    :param region_size_threshold:
-    :return:
-    """
 
     if image is None and image_path is None:
         raise ValueError(
@@ -104,14 +100,23 @@ def detect_regions_from_image(
             image=image,
         )
 
+        # default region skipping
         if region.w < region_size_threshold or region.h < region_size_threshold:
             continue
+
+        # callback provided region skipping
+        if callback_skip_region is not None and callback_skip_region(region):
+            continue
+
+        color = REGION_BOX_COLOR
+        if callback_ignore_region is not None and callback_ignore_region(region):
+            color = REGION_BOX_COLOR_IGNORE
 
         image_with_regions = cv2.rectangle(
             image_with_regions,
             (region.x0, region.y0),
             (region.x1, region.y1),
-            color=REGION_BOX_COLOR,
+            color=color,
             thickness=REGION_BOX_THICKNESS
         )
 
