@@ -21,6 +21,8 @@ Region = collections.namedtuple(
 # REGION_BOX_COLOR = (87, 177, 130)
 REGION_BOX_COLOR = (109, 177, 84)
 REGION_BOX_THICKNESS = 3
+REGION_BOX_FONT = cv2.FONT_HERSHEY_SIMPLEX
+REGION_BOX_FONT_COLOR = (87, 177, 130)
 
 
 # Borrowed from:
@@ -44,6 +46,7 @@ def detect_regions_from_image(
         image: typing.Optional[Image] = None,
         image_path: typing.Optional[str] = None,
         region_size_threshold: typing.Optional[float] = None,
+        number_from: typing.Optional[int] = None,
 ) -> typing.Tuple[Image, typing.List[Region]]:
     """
 
@@ -66,10 +69,13 @@ def detect_regions_from_image(
         image = image.copy()
 
     # default values
+    image_h = image.shape[0] # number of rows
+    image_w = image.shape[1]
+
     percent_threshold = 1.5
     absolute_threshold = min(
-        image.shape[0]*percent_threshold/100.0,
-        image.shape[1]*percent_threshold/100.0)
+        image_w*percent_threshold/100.0,
+        image_h*percent_threshold/100.0)
     region_size_threshold = region_size_threshold or absolute_threshold
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -87,7 +93,8 @@ def detect_regions_from_image(
 
     regions = []
     image_with_regions = image.copy()
-    for c in contours:
+    numbering = 0
+    for c in reversed(contours):
         area = cv2.contourArea(c)
         x, y, w, h = cv2.boundingRect(c)
 
@@ -108,7 +115,15 @@ def detect_regions_from_image(
             thickness=REGION_BOX_THICKNESS
         )
 
+        if number_from is not None:
+            image_with_regions = cv2.putText(
+                image_with_regions,
+                str(numbering),
+                (region.x0, region.y1),
+                REGION_BOX_FONT, 4, REGION_BOX_FONT_COLOR, 2, cv2.LINE_AA)
+
         regions.append(region)
+        numbering += 1
 
     return image_with_regions, regions
 
