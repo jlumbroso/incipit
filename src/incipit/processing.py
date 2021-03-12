@@ -11,7 +11,7 @@ import typing
 
 import cv2
 import numpy
-import PIL
+import PIL.Image
 import PyPDF4
 import loguru
 

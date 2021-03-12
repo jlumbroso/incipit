@@ -29,6 +29,9 @@ def detect_staves_from_input_document(
         if compute_ratios(region)[0] >= width_proportion
         if compute_ratios(region)[1] >= height_proportion
     ]
+    
+    # reindex staves
+    staves = incipit.processing.reindex_indexed_regions(regions=staves)
 
     # log outcome
     loguru.logger.info(
