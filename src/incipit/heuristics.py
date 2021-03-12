@@ -77,7 +77,10 @@ def extract_staves_from_input_document(
         width_proportion: float = 70.0,
         height_proportion: float = 10.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
-) -> typing.List[str, incipit.processing.Image]:
+) -> typing.Union[
+        typing.List[incipit.processing.Image],
+        typing.List[typing.Tuple[str, incipit.processing.Image]],
+]:
 
     staves = detect_staves_from_input_document(
         input_path=input_path,
