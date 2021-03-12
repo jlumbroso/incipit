@@ -128,7 +128,7 @@ def split_regions_by_image(
     return regions_by_image_index
 
 
-def draw_region(
+def draw_region_on_image(
         image: Image,
         region: typing.Union[Region, IndexedRegion],
         callback_ignore_region: typing.Optional[typing.Callable] = None,
@@ -156,7 +156,7 @@ def draw_region(
     return image
 
 
-def draw_regions(
+def draw_regions_on_images(
         regions: typing.List[typing.Union[Region, IndexedRegion]],
 ):
     regions_by_image = split_regions_by_image(regions=regions)
@@ -178,7 +178,7 @@ def draw_regions(
 
         # draw regions
         for region in regions:
-            image_with_region = draw_region(
+            image_with_region = draw_region_on_image(
                 image=image_with_regions,
                 region=region,
             )
