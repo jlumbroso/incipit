@@ -8,9 +8,9 @@ authors = ["Jérémie Lumbroso <lumbroso@cs.princeton.edu>"]
 python = "^3.8"
 opencv-python = "^4.5.1"
 pillow = "^8.1.2"
-pdf2image = "^1.14.0"
 PyPDF4 = "^1.27.0"
 click = "^7.1.2"
+loguru = "^0.5.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"

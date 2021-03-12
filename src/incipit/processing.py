@@ -1,12 +1,17 @@
 
 import collections
 import io
+import pathlib
+import random
+import string
+import tempfile
 import typing
 
 import cv2
 import numpy
 import PIL
 import PyPDF4
+import loguru
 
 
 Image = numpy.ndarray
@@ -18,12 +23,31 @@ Region = collections.namedtuple(
 )
 
 
+def log_region(region: Region, region_id: typing.Optional[int] = None):
+
+    # caption
+    caption = "Region"
+    if region_id is not None:
+        caption = "{} {}".format(caption, region_id)
+
+    loguru.logger.opt(depth=1).debug(
+        "{caption}: ({x0}, {y0}) -> ({x1}, {y1}), {w}x{h}, size: {size}, area: {area}",
+        caption=caption,
+        x0=region.x0, y0=region.y0, x1=region.x1, y1=region.y1,
+        w=region.w, h=region.h, size=region.size, area=region.area,
+    )
+
+
 # REGION_BOX_COLOR = (87, 177, 130)
 REGION_BOX_COLOR = (109, 177, 84)
 REGION_BOX_COLOR_IGNORE = (200, 161, 74)
 REGION_BOX_THICKNESS = 3
 REGION_BOX_FONT = cv2.FONT_HERSHEY_SIMPLEX
 REGION_BOX_FONT_COLOR = (87, 177, 130)
+
+
+# global variable
+_LOG_OUTPUT_FOLDER: typing.Optional[pathlib.Path] = None
 
 
 # Borrowed from:
@@ -34,9 +58,69 @@ def convert_from_cv2_to_image(img: Image) -> ImagePIL:
     return PIL.Image.fromarray(img)
 
 
-def convert_from_image_to_cv2(img: ImagePIL) -> Image:
+def convert_from_image_to_cv2(
+        img: ImagePIL,
+        resize: typing.Optional[float] = None,
+        to_8bit: bool = False,
+) -> Image:
     # return cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
-    return numpy.asarray(img)
+    # return numpy.asarray(img)
+
+    array = numpy.float32(numpy.asarray(img))
+
+    if resize is not None:
+        scale_percent = resize  # percent of original size
+        width = int(array.shape[1] * scale_percent / 100)
+        height = int(array.shape[0] * scale_percent / 100)
+        dim = (width, height)
+
+        # resize image
+        resized = cv2.resize(array, dim, interpolation=cv2.INTER_AREA)
+        array = resized
+
+    # normalize image
+    if to_8bit:
+        normalized = cv2.normalize(array, None, 0, 255, cv2.NORM_MINMAX, cv2.CV_8U)
+        array = normalized
+
+    return cv2.cvtColor(array, cv2.COLOR_RGB2BGR)
+
+
+def get_log_output_folder() -> pathlib.Path:
+    global _LOG_OUTPUT_FOLDER
+
+    if _LOG_OUTPUT_FOLDER is None:
+        dirpath = tempfile.mkdtemp(suffix="-incipit")
+        _LOG_OUTPUT_FOLDER = pathlib.Path(dirpath)
+
+    return _LOG_OUTPUT_FOLDER
+
+
+def log_intermediate_image(img: Image, caption: str = "", ext: str = "tiff"):
+
+    def _write_image_file(img, caption, ext):
+        # validation
+        if caption is None or type(caption) is not str:
+            caption = ""
+
+        # unique id
+        letters = string.ascii_letters
+        unique_str = ''.join(random.choice(letters) for i in range(10))
+
+        # filename
+        filename = "{}_{}.{}".format(caption or "image", unique_str, ext)
+        filepath = get_log_output_folder() / filename
+
+        # output
+        cv2.imwrite(str(filepath), img)
+
+        return filepath
+
+    loguru.logger.opt(depth=1, lazy=True).debug(
+        "Logged intermediate `{caption}' image: {filepath}",
+        caption=lambda: caption,
+        filepath=lambda: _write_image_file(
+            img=img, caption=caption, ext=ext))
 
 
 # Adapted from these remarkable articles by @akash-ch2812:
@@ -60,13 +144,24 @@ def detect_regions_from_image(
 
     if image is None:
         image = cv2.imread(image_path)
+        loguru.logger.debug("Read image from: {image_path}", image_path=image_path)
     else:
         # defensive copy
         image = image.copy()
 
+    # log image that is being worked on
+    log_intermediate_image(img=image, caption="0_original")
+
     # default values
-    image_h = image.shape[0] # number of rows
+    image_h = image.shape[0]  # number of rows
     image_w = image.shape[1]
+
+    loguru.logger.debug(
+        "Image: {width}x{height}, {type}",
+        width=image_w,
+        height=image_h,
+        type=type(image),
+    )
 
     percent_threshold = 1.5
     absolute_threshold = min(
@@ -75,21 +170,43 @@ def detect_regions_from_image(
     region_size_threshold = region_size_threshold or absolute_threshold
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (9, 9), 0)
+    log_intermediate_image(img=gray, caption="1_grayscaled")
+
+    blur_kernel_size = (9, 9)
+    blur_stddev = 0
+    blur = cv2.GaussianBlur(
+        src=gray, ksize=blur_kernel_size, sigmaX=blur_stddev)
+    log_intermediate_image(img=blur, caption="2_blurred")
+
     thresh = cv2.adaptiveThreshold(
-        blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 30)
+        src=blur,
+        maxValue=255,
+        adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        thresholdType=cv2.THRESH_BINARY_INV,
+        blockSize=11,
+        C=30)
+    log_intermediate_image(img=thresh, caption="3_adaptive_threshold")
 
     # Dilate to combine adjacent text contours
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9,9))
-    dilate = cv2.dilate(thresh, kernel, iterations=4)
+    kernel = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(9, 9))
+    dilate = cv2.dilate(
+        src=thresh,
+        kernel=kernel,
+        iterations=4)
+    log_intermediate_image(img=thresh, caption="4_dilated")
 
     # Find contours, highlight text areas, and extract ROIs
     contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
+    loguru.logger.debug("# contours found = {len}", len=len(contours))
 
     regions = []
     image_with_regions = image.copy()
     numbering = 0
+
+    # somehow the contours are from bottom to top
     for c in reversed(contours):
         area = cv2.contourArea(c)
         x, y, w, h = cv2.boundingRect(c)
@@ -100,16 +217,24 @@ def detect_regions_from_image(
             image=image,
         )
 
+        log_region(region=region)
+
         # default region skipping
         if region.w < region_size_threshold or region.h < region_size_threshold:
+            loguru.logger.debug(
+                "-> skipped, too small (region_size_threshold={})",
+                region_size_threshold
+            )
             continue
 
         # callback provided region skipping
         if callback_skip_region is not None and callback_skip_region(region):
+            loguru.logger.debug("-> skipped, callback_skip_region == True")
             continue
 
         color = REGION_BOX_COLOR
         if callback_ignore_region is not None and callback_ignore_region(region):
+            loguru.logger.debug("-> colored ignore, callback_ignore_region == True")
             color = REGION_BOX_COLOR_IGNORE
 
         image_with_regions = cv2.rectangle(
@@ -125,10 +250,15 @@ def detect_regions_from_image(
                 image_with_regions,
                 str(numbering),
                 (region.x0, region.y1),
-                REGION_BOX_FONT, 4, REGION_BOX_FONT_COLOR, 2, cv2.LINE_AA)
+                REGION_BOX_FONT, 4, REGION_BOX_FONT_COLOR, 10, cv2.LINE_AA)
+
+        loguru.logger.debug("=> drew region and added to return value")
+        log_region(region=region, region_id=numbering)
 
         regions.append(region)
         numbering += 1
+
+    loguru.logger.debug("Found {} regions", len(regions))
 
     return image_with_regions, regions
 
