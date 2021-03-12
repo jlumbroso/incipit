@@ -1,6 +1,8 @@
 
+import binascii
 import collections
 import io
+import os
 import pathlib
 import random
 import string
@@ -19,23 +21,13 @@ ImagePIL = PIL.Image.Image
 
 Region = collections.namedtuple(
     "Region",
-    ["x0", "y0", "x1", "y1", "w", "h", "size", "area", "image"]
+    ["x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
 )
 
-
-def log_region(region: Region, region_id: typing.Optional[int] = None):
-
-    # caption
-    caption = "Region"
-    if region_id is not None:
-        caption = "{} {}".format(caption, region_id)
-
-    loguru.logger.opt(depth=1).debug(
-        "{caption}: ({x0}, {y0}) -> ({x1}, {y1}), {w}x{h}, size: {size}, area: {area}",
-        caption=caption,
-        x0=region.x0, y0=region.y0, x1=region.x1, y1=region.y1,
-        w=region.w, h=region.h, size=region.size, area=region.area,
-    )
+IndexedRegion = collections.namedtuple(
+    "Region",
+    ["page", "index", "x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
+)
 
 
 # REGION_BOX_COLOR = (87, 177, 130)
@@ -50,23 +42,169 @@ REGION_BOX_FONT_COLOR = (87, 177, 130)
 _LOG_OUTPUT_FOLDER: typing.Optional[pathlib.Path] = None
 
 
+def region_to_indexed_region(
+        region: Region,
+        index: int,
+        page: int,
+) -> IndexedRegion:
+    region_dict = region._asdict()
+    region_dict.update({
+        "page": page,
+        "index": index,
+    })
+    return IndexedRegion(**region_dict)
+
+
+def reindex_indexed_regions(
+        regions: typing.List[IndexedRegion]
+) -> typing.List[IndexedRegion]:
+
+    reindexed_regions = []
+
+    for index, region in enumerate(regions):
+        region_dict = region._asdict()
+        region_dict.update({
+            "index": index,
+        })
+        reindexed_regions.append(IndexedRegion(**region_dict))
+
+    return reindexed_regions
+
+
+def log_region(
+        region: typing.Union[Region, IndexedRegion],
+        region_id: typing.Optional[int] = None
+):
+
+    # caption
+    caption = "Region"
+    if region_id is not None:
+        caption = "{} {}".format(caption, region_id)
+
+    loguru.logger.opt(depth=1).debug(
+        (
+            "{caption}: ({x0}, {y0}) -> ({x1}, {y1}), {w}x{h}, "
+            "size: {size}, area: {area}, image: {image_crc32}"
+        ),
+        caption=caption,
+        x0=region.x0, y0=region.y0, x1=region.x1, y1=region.y1,
+        w=region.w, h=region.h, size=region.size, area=region.area,
+        image_crc32=region.image_crc32,
+    )
+
+
+def split_regions_by_image(
+        regions: typing.List[typing.Union[Region, IndexedRegion]],
+) -> typing.List[typing.List[typing.Union[Region, IndexedRegion]]]:
+    regions.sort(
+        key=(
+            lambda region:
+            (
+                region._asdict().get("page"),
+                region.image_crc32,
+                region._asdict().get("index")
+            )
+        ))
+
+    distinct_images = []
+    distinct_images_crc32 = []
+    regions_by_image_index = []
+
+    for region in regions:
+
+        if region.image_crc32 not in distinct_images_crc32:
+            # a new image is found!
+            distinct_images.append(region.image)
+            distinct_images_crc32.append(region.image_crc32)
+
+            # create empty list for this image's regions
+            regions_by_image_index.append([])
+
+        # at this point the crc32 should definitely be in the list
+        image_index = distinct_images_crc32.index(region.image_crc32)
+
+        regions_by_image_index[image_index].append(region)
+
+    return regions_by_image_index
+
+
+def draw_region(
+        image: Image,
+        region: typing.Union[Region, IndexedRegion],
+        callback_ignore_region: typing.Optional[typing.Callable] = None,
+) -> Image:
+    color = REGION_BOX_COLOR
+
+    if callback_ignore_region is not None and callback_ignore_region(region):
+        color = REGION_BOX_COLOR_IGNORE
+
+    image = cv2.rectangle(
+        image,
+        (region.x0, region.y0),
+        (region.x1, region.y1),
+        color=color,
+        thickness=REGION_BOX_THICKNESS
+    )
+
+    if type(region) is IndexedRegion:
+        image = cv2.putText(
+            image,
+            str(region.index),
+            (region.x0, region.y1),
+            REGION_BOX_FONT, 4, REGION_BOX_FONT_COLOR, 10, cv2.LINE_AA)
+
+    return image
+
+
+def draw_regions(
+        regions: typing.List[typing.Union[Region, IndexedRegion]],
+):
+    regions_by_image = split_regions_by_image(regions=regions)
+    images_with_regions = []
+
+    for image_index, regions in enumerate(regions_by_image):
+
+        # skip empty images
+        # (should never happen BTW, but better be cautious...)
+        if len(regions) == 0:
+            continue
+
+        # image is the same in all regions, so take the one from
+        # the first region
+        image = regions[0].image
+
+        # defensively copy
+        image_with_regions = image.copy()
+
+        # draw regions
+        for region in regions:
+            image_with_region = draw_region(
+                image=image_with_regions,
+                region=region,
+            )
+
+        images_with_regions.append(image_with_regions)
+
+    return images_with_regions
+
+
 # Borrowed from:
 # - https://stackoverflow.com/a/65634189/408734
 
-def convert_from_cv2_to_image(img: Image) -> ImagePIL:
+def convert_from_cv2_to_image(image: Image) -> ImagePIL:
     # return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-    return PIL.Image.fromarray(img)
+    return PIL.Image.fromarray(image)
 
 
 def convert_from_image_to_cv2(
-        img: ImagePIL,
+        image: ImagePIL,
         resize: typing.Optional[float] = None,
         to_8bit: bool = False,
 ) -> Image:
     # return cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
     # return numpy.asarray(img)
 
-    array = numpy.float32(numpy.asarray(img))
+    array = numpy.float32(numpy.asarray(image))
 
     if resize is not None:
         scale_percent = resize  # percent of original size
@@ -206,6 +344,9 @@ def detect_regions_from_image(
     image_with_regions = image.copy()
     numbering = 0
 
+    # hash image to make it easier to identify regions from different images
+    image_crc32 = binascii.crc32(image.data)
+
     # somehow the contours are from bottom to top
     for c in reversed(contours):
         area = cv2.contourArea(c)
@@ -215,6 +356,7 @@ def detect_regions_from_image(
             x0=x, y0=y, x1=(x+w), y1=(y+h),
             w=w, h=h, size=(w*h), area=area,
             image=image,
+            image_crc32=image_crc32,
         )
 
         log_region(region=region)
@@ -263,8 +405,31 @@ def detect_regions_from_image(
     return image_with_regions, regions
 
 
+def compute_region_to_image_ratios(
+        region: typing.Union[Region, IndexedRegion],
+        image: typing.Optional[Image] = None,
+) -> typing.Tuple[float, float]:
+
+    # default to the region's image if none is provided
+    image = image or region.image
+
+    # find image size; shape as (H, W, D)
+    img = region.image
+    shape = img.shape
+    h, w = shape[0], shape[1]
+
+    landscape = (w < h * 0.90)
+
+    ratio_w = region.w / w * 100.0
+    ratio_h = region.h / h * 100.0
+
+    ratios = (ratio_w, ratio_h)
+
+    return ratios
+
+
 def extract_region_from_image(
-        region: Region,
+        region: typing.Union[Region, IndexedRegion],
         image: typing.Optional[Image] = None,
 ) -> Image:
 
@@ -362,7 +527,11 @@ def extract_images_from_pdf(
                 continue
 
             if as_numpy_images:
-                image = convert_from_image_to_cv2(image)
+                # not clear these parameters are always the right ones
+                image = convert_from_image_to_cv2(
+                    image=image,
+                    resize=100,
+                    to_8bit=True)
 
             images.append((page_number, image_index, image))
             image_index += 1
@@ -383,3 +552,105 @@ def extract_images_from_pdf(
 
     return images
 
+
+def load_images_from_input_document(
+        path: str
+) -> typing.List[Image]:
+
+    loguru.logger.debug("Loading input document: {}", path)
+
+    abspath = os.path.abspath(path)
+    _, ext = os.path.splitext(abspath)
+
+    # check existence!
+    if not os.path.exists(abspath):
+        loguru.logger.info(
+            "=> DOES NOT EXIST, returning empty list"
+        )
+        return []
+
+    # normalize to lowercase + remove dot
+    ext = ext.lower()[1:]
+
+    images = []
+
+    if ext == "pdf":
+        loguru.logger.debug("=> detecting it is PDF, using `extract_image_from_pdf()`")
+        images = extract_images_from_pdf(
+            pdf_path=abspath,
+            as_numpy_images=True)
+
+    elif ext in ["png", "jpg", "jpeg", "jp2", "tif", "tiff"]:
+        loguru.logger.debug("=> detecting it is image, using `cv2.imread()`")
+        image = cv2.imread(abspath)
+        images = [image]
+
+    else:
+        loguru.logger.info("=> unsupported input document: '{}", len(images))
+
+    loguru.logger.debug("=> loaded {} images", len(images))
+
+    return images
+
+
+def detect_regions_from_images(
+        images: typing.List[Image],
+        page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
+) -> typing.List[IndexedRegion]:
+
+    overall_regions = []
+
+    number_from = 0
+    for page, image in enumerate(images):
+
+        # see if this page should be skipped
+        if page_numbers_to_keep is not None and page not in page_numbers_to_keep:
+            loguru.logger.debug(
+                "skipping page {} as it is not in `page_numbers_to_keep`: {}",
+                page=page, page_numbers_to_keep=page_numbers_to_keep,
+            )
+            continue
+
+        # call function to extract regions of interest from image
+        _, regions = detect_regions_from_image(
+            image=image,
+            number_from=number_from,
+        )
+
+        # add all regions with page number to selection
+        for index, region in enumerate(regions):
+            overall_regions.append(
+                region_to_indexed_region(
+                    region=region,
+                    index=(number_from + index),
+                    page=page,
+                ))
+
+        # shift numbering
+        number_from += len(regions)
+
+    loguru.logger.debug(
+        "found {} regions in total from {} images",
+        len(overall_regions), len(images),
+    )
+
+    return overall_regions
+
+
+def detect_regions_from_input_document(
+        path: str,
+        page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
+) -> typing.List[IndexedRegion]:
+
+    images = load_images_from_input_document(path=path)
+    regions = detect_regions_from_images(
+        images=images,
+        page_numbers_to_keep=page_numbers_to_keep,
+    )
+
+    loguru.logger.info(
+        "found {} regions from {} images in document: '{}'",
+        len(regions), len(images), path,
+    )
+
+    return regions
