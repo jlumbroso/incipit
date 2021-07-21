@@ -332,8 +332,8 @@ def detect_regions_from_image(
     dilate = cv2.dilate(
         src=thresh,
         kernel=kernel,
-        iterations=5)
-    log_intermediate_image(img=thresh, caption="5_dilated")
+        iterations=2)
+    log_intermediate_image(img=thresh, caption="2_dilated")
 
     # Find contours, highlight text areas, and extract ROIs
     contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

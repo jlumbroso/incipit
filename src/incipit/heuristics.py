@@ -78,7 +78,7 @@ def extract_staves_from_input_document(
         output_filename_pattern: typing.Optional[str] = None,
         staves_to_keep: typing.Optional[typing.List[int]] = None,
         width_proportion: float = 70.0,
-        height_proportion: float = 10.0,
+        height_proportion: float = 9.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
 ) -> typing.Union[
         typing.List[src.incipit.processing.Image],
