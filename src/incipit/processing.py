@@ -654,3 +654,4 @@ def detect_regions_from_input_document(
     )
 
     return regions
+
