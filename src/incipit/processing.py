@@ -319,9 +319,9 @@ def detect_regions_from_image(
     thresh = cv2.adaptiveThreshold(
         src=blur,
         maxValue=255,
-        adaptiveMethod=cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        adaptiveMethod=cv2.ADAPTIVE_THRESH_MEAN_C,
         thresholdType=cv2.THRESH_BINARY_INV,
-        blockSize=11,
+        blockSize=9,
         C=30)
     log_intermediate_image(img=thresh, caption="3_adaptive_threshold")
 
@@ -332,8 +332,8 @@ def detect_regions_from_image(
     dilate = cv2.dilate(
         src=thresh,
         kernel=kernel,
-        iterations=4)
-    log_intermediate_image(img=thresh, caption="4_dilated")
+        iterations=2)
+    log_intermediate_image(img=thresh, caption="2_dilated")
 
     # Find contours, highlight text areas, and extract ROIs
     contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
