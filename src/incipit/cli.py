@@ -20,7 +20,7 @@ import incipit.heuristics
 @click.option("-c", "--count", is_flag=True, help="Output number of detected systems")
 @click.option("-p", "--pages", type=str, help="List of pages to process (e.g., '0', '0,-1')")
 @click.option("-#", "--systems", type=str, help="List of systems to extract (e.g., '0', '0,-1')")
-@click.option("-h", "--height-threshold", type=float, default=10.0, help="% of height threshold for system detection")
+@click.option("-h", "--height-threshold", type=float, default=9.0, help="% of height threshold for system detection")
 @click.option("-w", "--width-threshold", type=float, default=70.0, help="% of width threshold for system detection")
 @click.option("-o", "--output", help="Output file pattern")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Print debug information")
