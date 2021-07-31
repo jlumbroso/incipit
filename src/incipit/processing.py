@@ -328,12 +328,12 @@ def detect_regions_from_image(
     # Dilate to combine adjacent text contours
     kernel = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
-        ksize=(9, 9))
+        ksize=(3, 3))
     dilate = cv2.dilate(
         src=thresh,
         kernel=kernel,
-        iterations=2)
-    log_intermediate_image(img=thresh, caption="2_dilated")
+        iterations=3)
+    log_intermediate_image(img=thresh, caption="3_dilated")
 
     # Find contours, highlight text areas, and extract ROIs
     contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
