@@ -332,11 +332,44 @@ def detect_regions_from_image(
     dilate = cv2.dilate(
         src=thresh,
         kernel=kernel,
-        iterations=3)
-    log_intermediate_image(img=thresh, caption="3_dilated")
+        iterations=4)
+    log_intermediate_image(img=dilate, caption="4_dilated")
+
+    kernelErodeVertical = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(1, 150)
+    )
+    erodeVertical = cv2.erode(
+        src=dilate,
+        kernel= kernelErodeVertical,
+        iterations = 1
+    )
+
+    kernelErodeHorizontal = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(200, 1)
+    )
+    erodeHorizontal = cv2.erode(
+        src=dilate,
+        kernel= kernelErodeHorizontal,
+        iterations = 1
+    )
+
+    erodeMerge = erodeHorizontal + erodeVertical
+
+    # Dilate to combine adjacent text contours
+    kernel = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(50, 9))
+    dilateEnd = cv2.dilate(
+        src=erodeMerge,
+        kernel=kernel,
+        iterations=4)
+    log_intermediate_image(img=dilateEnd, caption="4_dilateEnd")
+
 
     # Find contours, highlight text areas, and extract ROIs
-    contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(dilateEnd, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
     loguru.logger.debug("# contours found = {len}", len=len(contours))
 
