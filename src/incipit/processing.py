@@ -345,6 +345,16 @@ def detect_regions_from_image(
         iterations = 1
     )
 
+    kernelErodeVerticalThinLine = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(8, 1)
+    )
+    erodeVerticalAfterThinLine = cv2.erode(
+        src=erodeVertical,
+        kernel= kernelErodeVerticalThinLine,
+        iterations = 1
+    )
+
     kernelErodeHorizontal = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(200, 1)
@@ -355,7 +365,7 @@ def detect_regions_from_image(
         iterations = 1
     )
 
-    erodeMerge = erodeHorizontal + erodeVertical
+    erodeMerge = erodeHorizontal + erodeVerticalAfterThinLine
 
     # Dilate to combine adjacent text contours
     kernel = cv2.getStructuringElement(
