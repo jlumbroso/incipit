@@ -45,6 +45,7 @@ def detect_staves_from_input_document(
 def write_staff_detection_images_from_input_document(
         input_path: str,
         output_filename_pattern: str,
+
         width_proportion: float = 55.0,
         height_proportion: float = 8.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
