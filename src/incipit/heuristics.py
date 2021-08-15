@@ -4,7 +4,7 @@ import typing
 import cv2
 import loguru
 
-import src.incipit.processing
+import incipit.processing
 
 
 def detect_staves_from_input_document(
@@ -12,15 +12,15 @@ def detect_staves_from_input_document(
         width_proportion: float = 55.0,
         height_proportion: float = 8.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
-) -> typing.List[src.incipit.processing.IndexedRegion]:
+) -> typing.List[incipit.processing.IndexedRegion]:
 
-    regions = src.incipit.processing.detect_regions_from_input_document(
+    regions = incipit.processing.detect_regions_from_input_document(
         path=input_path,
         page_numbers_to_keep=page_numbers_to_keep,
     )
 
     # alias for shortness
-    compute_ratios = src.incipit.processing.compute_region_to_image_ratios
+    compute_ratios = incipit.processing.compute_region_to_image_ratios
 
     # select regions that meet these criteria
     staves = [
@@ -31,7 +31,7 @@ def detect_staves_from_input_document(
     ]
     
     # reindex staves
-    staves = src.incipit.processing.reindex_indexed_regions(regions=staves)
+    staves = incipit.processing.reindex_indexed_regions(regions=staves)
 
     # log outcome
     loguru.logger.info(
@@ -58,7 +58,7 @@ def write_staff_detection_images_from_input_document(
         page_numbers_to_keep=page_numbers_to_keep,
     )
 
-    images_with_stave_regions = src.incipit.processing.draw_regions_on_images(
+    images_with_stave_regions = incipit.processing.draw_regions_on_images(
         regions=staves,
     )
 
@@ -83,8 +83,8 @@ def extract_staves_from_input_document(
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
 ) -> typing.Union[
 
-        typing.List[src.incipit.processing.Image],
-        typing.List[typing.Tuple[str, src.incipit.processing.Image]],
+        typing.List[incipit.processing.Image],
+        typing.List[typing.Tuple[str, incipit.processing.Image]],
 ]:
 
     staves = detect_staves_from_input_document(
@@ -124,7 +124,7 @@ def extract_staves_from_input_document(
         if index not in normalized_staves_to_keep:
             continue
 
-        staff_image = src.incipit.processing.extract_region_from_image(staff_region)
+        staff_image = incipit.processing.extract_region_from_image(staff_region)
 
         if output_filename_pattern is not None:
             filename = output_filename_pattern.format(index)
