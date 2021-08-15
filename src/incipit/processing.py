@@ -329,22 +329,21 @@ def detect_regions_from_image(
     kernel = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(3, 3))
-    dilate = cv2.dilate(
+    dilateStart = cv2.dilate(
         src=thresh,
         kernel=kernel,
         iterations=4)
-    log_intermediate_image(img=dilate, caption="4_dilated")
+    log_intermediate_image(img=dilateStart, caption="4_dilated")
 
     kernelErodeVertical = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(1, 150)
     )
     erodeVertical = cv2.erode(
-        src=dilate,
+        src=dilateStart,
         kernel= kernelErodeVertical,
         iterations = 1
     )
-
     kernelErodeVerticalThinLine = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(8, 1)
@@ -360,7 +359,7 @@ def detect_regions_from_image(
         ksize=(200, 1)
     )
     erodeHorizontal = cv2.erode(
-        src=dilate,
+        src=dilateStart,
         kernel= kernelErodeHorizontal,
         iterations = 1
     )
