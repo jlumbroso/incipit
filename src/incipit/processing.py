@@ -1,4 +1,4 @@
-
+from recordtype import recordtype
 import binascii
 import collections
 import io
@@ -8,7 +8,7 @@ import random
 import string
 import tempfile
 import typing
-
+import sys
 import cv2
 import numpy
 import PIL.Image
@@ -19,12 +19,12 @@ import loguru
 Image = numpy.ndarray
 ImagePIL = PIL.Image.Image
 
-Region = collections.namedtuple(
+Region = recordtype(
     "Region",
     ["x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
 )
 
-IndexedRegion = collections.namedtuple(
+IndexedRegion = recordtype(
     "Region",
     ["page", "index", "x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
 )
@@ -128,6 +128,33 @@ def split_regions_by_image(
     return regions_by_image_index
 
 
+def adjust_region_position_by_image(
+        regions: typing.List[typing.Union[Region, IndexedRegion]],
+) -> typing.List[typing.Union[Region, IndexedRegion]]:
+    minX = sys.maxsize
+    maxX = 0
+    currentBottomY = 0
+    index = 0
+    minGapVertical = sys.maxsize
+    for region in regions:
+        minX = min(minX, region.x0)
+        maxX = max(maxX, region.x1)
+        if (index > 0):
+            minGapVertical = min(region.y0 - currentBottomY, minGapVertical)
+        currentBottomY = region.y1
+        index = index + 1
+
+    for i in range(len(regions)):
+        regions[i].x0 = minX
+        regions[i].x1 = maxX
+        currentRegionHeight = regions[i].y1 - regions[i].y0
+        maxY = region.image.shape[0]
+        regions[i].y0 = max(regions[i].y0 - int(min(minGapVertical * 0.4, currentRegionHeight / 3)), 1)
+        regions[i].y1 = min(regions[i].y1 + int(min(minGapVertical * 0.4, currentRegionHeight / 3)), maxY)
+
+    return regions
+
+
 def draw_region_on_image(
         image: Image,
         region: typing.Union[Region, IndexedRegion],
@@ -175,6 +202,9 @@ def draw_regions_on_images(
 
         # defensively copy
         image_with_regions = image.copy()
+
+        # adjsut region positioning
+        regions = adjust_region_position_by_image(regions)
 
         # draw regions
         for region in regions:
