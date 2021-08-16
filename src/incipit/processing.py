@@ -130,27 +130,29 @@ def split_regions_by_image(
 
 def adjust_region_position_by_image(
         regions: typing.List[typing.Union[Region, IndexedRegion]],
-) -> typing.List[typing.Union[Region, IndexedRegion]]:
-    minX = sys.maxsize
-    maxX = 0
-    currentBottomY = 0
+        expand_vertical_ratio_of_system: float = 0.5,
+        expand_vertical_ratio_of_gap: float = 0.45,
+)-> typing.List[typing.Union[Region, IndexedRegion]]:
+    leftmost_system_boundary = sys.maxsize
+    rightmost_system_boundary = 0
+    previous_system_bottom_y_coordinate = 0
     index = 0
-    minGapVertical = sys.maxsize
+    min_vertical_gap_between_systems = sys.maxsize
     for region in regions:
-        minX = min(minX, region.x0)
-        maxX = max(maxX, region.x1)
-        if (index > 0):
-            minGapVertical = min(region.y0 - currentBottomY, minGapVertical)
-        currentBottomY = region.y1
-        index = index + 1
+        leftmost_system_boundary = min(leftmost_system_boundary, region.x0)
+        rightmost_system_boundary = max(rightmost_system_boundary, region.x1)
+        if( index > 0 ):
+            min_vertical_gap_between_systems = min(region.y0 - previous_system_bottom_y_coordinate, min_vertical_gap_between_systems)
+        previous_system_bottom_y_coordinate = region.y1
+        index += 1
 
-    for i in range(len(regions)):
-        regions[i].x0 = minX
-        regions[i].x1 = maxX
-        currentRegionHeight = regions[i].y1 - regions[i].y0
-        maxY = region.image.shape[0]
-        regions[i].y0 = max(regions[i].y0 - int(min(minGapVertical * 0.4, currentRegionHeight / 3)), 1)
-        regions[i].y1 = min(regions[i].y1 + int(min(minGapVertical * 0.4, currentRegionHeight / 3)), maxY)
+    for region in regions:
+        region.x0 = leftmost_system_boundary
+        region.x1 = rightmost_system_boundary
+        currentRegionHeight = region.y1 - region.y0
+        imageHeight = region.image.shape[0]
+        region.y0 = max(region.y0 - int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, currentRegionHeight * expand_vertical_ratio_of_system )), 1)
+        region.y1 = min(region.y1 + int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, currentRegionHeight * expand_vertical_ratio_of_system)), imageHeight)
 
     return regions
 
