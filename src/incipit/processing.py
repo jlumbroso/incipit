@@ -133,11 +133,25 @@ def adjust_region_position_by_image(
         expand_vertical_ratio_of_system: float = 0.5,
         expand_vertical_ratio_of_gap: float = 0.45,
 )-> typing.List[typing.Union[Region, IndexedRegion]]:
+    """The function is to expand the rectangle boundary for the systems detected within the same page. The purpose of this function is to make sure the adjusted system covers the whole area including those not detected initially as the core rectangle.
+       At horizontal level, it moves each system's left and right boundary to be the same as the leftmost and rightmost boundary among all the systems.
+       At vertical level, it moves the top boundary higher by the size of the smaller value of the minimum gap between systems adjusted by expand_vertical_ratio_of_gap and the height of the current system adjusted by expand_vertical_ratio_of_system.
+       It also moves the bottom boundary lower by the same amount as for the top boundary.
+
+    Args:
+        regions (typing.List[typing.Union[Region, IndexedRegion]]): The list of systems detected within the same page
+        expand_vertical_ratio_of_system (float): The ratio applied to the current height of the system
+        expand_vertical_ratio_of_gap(float): The ratio applied to the smallest vertical gap among all systems
+
+    Returns:
+        The adjusted systems within the same page
+    """
     leftmost_system_boundary = sys.maxsize
     rightmost_system_boundary = 0
     previous_system_bottom_y_coordinate = 0
     index = 0
     min_vertical_gap_between_systems = sys.maxsize
+    # In first pass of regions, we detect leftmost, rightmost boundaries and the minimum vertical gap between systems
     for region in regions:
         leftmost_system_boundary = min(leftmost_system_boundary, region.x0)
         rightmost_system_boundary = max(rightmost_system_boundary, region.x1)
@@ -146,13 +160,17 @@ def adjust_region_position_by_image(
         previous_system_bottom_y_coordinate = region.y1
         index += 1
 
+    # In second pass of regions, we normalize regions widths to leftmost and rightmost boundaries,
+    # and regions height based on minimum gap between systems and the current system height
+    # (FIXME: assumes image is not crooked/skewed; future work should attempt to detect skew and
+    # limit corrections when too much skew, or fail when too much skew)
     for region in regions:
         region.x0 = leftmost_system_boundary
         region.x1 = rightmost_system_boundary
-        currentRegionHeight = region.y1 - region.y0
-        imageHeight = region.image.shape[0]
-        region.y0 = max(region.y0 - int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, currentRegionHeight * expand_vertical_ratio_of_system )), 1)
-        region.y1 = min(region.y1 + int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, currentRegionHeight * expand_vertical_ratio_of_system)), imageHeight)
+        current_region_height = region.y1 - region.y0
+        image_height = region.image.shape[0]
+        region.y0 = max(region.y0 - int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, current_region_height * expand_vertical_ratio_of_system )), 1)
+        region.y1 = min(region.y1 + int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, current_region_height * expand_vertical_ratio_of_system)), image_height)
 
     return regions
 
@@ -205,7 +223,7 @@ def draw_regions_on_images(
         # defensively copy
         image_with_regions = image.copy()
 
-        # adjsut region positioning
+        # expand the regions' boundary to cover the whole system
         regions = adjust_region_position_by_image(regions)
 
         # draw regions
@@ -361,55 +379,55 @@ def detect_regions_from_image(
     kernel = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(3, 3))
-    dilateStart = cv2.dilate(
+    dilate_start = cv2.dilate(
         src=thresh,
         kernel=kernel,
         iterations=4)
-    log_intermediate_image(img=dilateStart, caption="4_dilated")
+    log_intermediate_image(img=dilate_start, caption="4_dilated")
 
-    kernelErodeVertical = cv2.getStructuringElement(
+    kernel_erode_vertical = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(1, 150)
     )
-    erodeVertical = cv2.erode(
-        src=dilateStart,
-        kernel= kernelErodeVertical,
+    erode_vertical = cv2.erode(
+        src=dilate_start,
+        kernel= kernel_erode_vertical,
         iterations = 1
     )
-    kernelErodeVerticalThinLine = cv2.getStructuringElement(
+    kernel_erode_vertical_thin_line = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(8, 1)
     )
     erodeVerticalAfterThinLine = cv2.erode(
-        src=erodeVertical,
-        kernel= kernelErodeVerticalThinLine,
+        src=erode_vertical,
+        kernel= kernel_erode_vertical_thin_line,
         iterations = 1
     )
 
-    kernelErodeHorizontal = cv2.getStructuringElement(
+    kernel_erode_horizontal = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(200, 1)
     )
-    erodeHorizontal = cv2.erode(
-        src=dilateStart,
-        kernel= kernelErodeHorizontal,
+    erode_horizontal = cv2.erode(
+        src=dilate_start,
+        kernel= kernel_erode_horizontal,
         iterations = 1
     )
 
-    erodeMerge = erodeHorizontal + erodeVerticalAfterThinLine
+    erodeMerge = erode_horizontal + erodeVerticalAfterThinLine
 
     # Dilate to combine adjacent text contours
     kernel = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
         ksize=(50, 9))
-    dilateEnd = cv2.dilate(
+    dilate_end = cv2.dilate(
         src=erodeMerge,
         kernel=kernel,
         iterations=4)
-    log_intermediate_image(img=dilateEnd, caption="4_dilateEnd")
+    log_intermediate_image(img=dilate_end, caption="4_dilateEnd")
 
     # Find contours, highlight text areas, and extract ROIs
-    contours = cv2.findContours(dilateEnd, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(dilate_end, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
     loguru.logger.debug("# contours found = {len}", len=len(contours))
 
