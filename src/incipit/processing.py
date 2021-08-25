@@ -398,7 +398,7 @@ def detect_regions_from_image(
         shape=cv2.MORPH_RECT,
         ksize=(8, 1)
     )
-    erodeVerticalAfterThinLine = cv2.erode(
+    erode_vertical_after_thin_line = cv2.erode(
         src=erode_vertical,
         kernel= kernel_erode_vertical_thin_line,
         iterations = 1
@@ -414,7 +414,7 @@ def detect_regions_from_image(
         iterations = 1
     )
 
-    erodeMerge = erode_horizontal + erodeVerticalAfterThinLine
+    erodeMerge = erode_horizontal + erode_vertical_after_thin_line
 
     # Dilate to combine adjacent text contours
     kernel = cv2.getStructuringElement(
