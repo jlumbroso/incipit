@@ -1,4 +1,4 @@
-
+from recordtype import recordtype
 import binascii
 import collections
 import io
@@ -8,7 +8,7 @@ import random
 import string
 import tempfile
 import typing
-
+import sys
 import cv2
 import numpy
 import PIL.Image
@@ -19,12 +19,12 @@ import loguru
 Image = numpy.ndarray
 ImagePIL = PIL.Image.Image
 
-Region = collections.namedtuple(
+Region = recordtype(
     "Region",
     ["x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
 )
 
-IndexedRegion = collections.namedtuple(
+IndexedRegion = recordtype(
     "Region",
     ["page", "index", "x0", "y0", "x1", "y1", "w", "h", "size", "area", "image", "image_crc32"]
 )
@@ -128,6 +128,53 @@ def split_regions_by_image(
     return regions_by_image_index
 
 
+def adjust_region_position_by_image(
+        regions: typing.List[typing.Union[Region, IndexedRegion]],
+        expand_vertical_ratio_of_system: float = 0.5,
+        expand_vertical_ratio_of_gap: float = 0.45,
+)-> typing.List[typing.Union[Region, IndexedRegion]]:
+    """The function is to expand the rectangle boundary for the systems detected within the same page. The purpose of this function is to make sure the adjusted system covers the whole area including those not detected initially as the core rectangle.
+       At horizontal level, it moves each system's left and right boundary to be the same as the leftmost and rightmost boundary among all the systems.
+       At vertical level, it moves the top boundary higher by the size of the smaller value of the minimum gap between systems adjusted by expand_vertical_ratio_of_gap and the height of the current system adjusted by expand_vertical_ratio_of_system.
+       It also moves the bottom boundary lower by the same amount as for the top boundary.
+
+    Args:
+        regions (typing.List[typing.Union[Region, IndexedRegion]]): The list of systems detected within the same page
+        expand_vertical_ratio_of_system (float): The ratio applied to the current height of the system
+        expand_vertical_ratio_of_gap(float): The ratio applied to the smallest vertical gap among all systems
+
+    Returns:
+        The adjusted systems within the same page
+    """
+    leftmost_system_boundary = sys.maxsize
+    rightmost_system_boundary = 0
+    previous_system_bottom_y_coordinate = 0
+    index = 0
+    min_vertical_gap_between_systems = sys.maxsize
+    # In first pass of regions, we detect leftmost, rightmost boundaries and the minimum vertical gap between systems
+    for region in regions:
+        leftmost_system_boundary = min(leftmost_system_boundary, region.x0)
+        rightmost_system_boundary = max(rightmost_system_boundary, region.x1)
+        if( index > 0 ):
+            min_vertical_gap_between_systems = min(region.y0 - previous_system_bottom_y_coordinate, min_vertical_gap_between_systems)
+        previous_system_bottom_y_coordinate = region.y1
+        index += 1
+
+    # In second pass of regions, we normalize regions widths to leftmost and rightmost boundaries,
+    # and regions height based on minimum gap between systems and the current system height
+    # (FIXME: assumes image is not crooked/skewed; future work should attempt to detect skew and
+    # limit corrections when too much skew, or fail when too much skew)
+    for region in regions:
+        region.x0 = leftmost_system_boundary
+        region.x1 = rightmost_system_boundary
+        current_region_height = region.y1 - region.y0
+        image_height = region.image.shape[0]
+        region.y0 = max(region.y0 - int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, current_region_height * expand_vertical_ratio_of_system )), 1)
+        region.y1 = min(region.y1 + int(min ( min_vertical_gap_between_systems * expand_vertical_ratio_of_gap, current_region_height * expand_vertical_ratio_of_system)), image_height)
+
+    return regions
+
+
 def draw_region_on_image(
         image: Image,
         region: typing.Union[Region, IndexedRegion],
@@ -175,6 +222,9 @@ def draw_regions_on_images(
 
         # defensively copy
         image_with_regions = image.copy()
+
+        # expand the regions' boundary to cover the whole system
+        regions = adjust_region_position_by_image(regions)
 
         # draw regions
         for region in regions:
@@ -328,15 +378,56 @@ def detect_regions_from_image(
     # Dilate to combine adjacent text contours
     kernel = cv2.getStructuringElement(
         shape=cv2.MORPH_RECT,
-        ksize=(9, 9))
-    dilate = cv2.dilate(
+        ksize=(3, 3))
+    dilate_start = cv2.dilate(
         src=thresh,
         kernel=kernel,
-        iterations=2)
-    log_intermediate_image(img=thresh, caption="2_dilated")
+        iterations=4)
+    log_intermediate_image(img=dilate_start, caption="4_dilated")
+
+    kernel_erode_vertical = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(1, 150)
+    )
+    erode_vertical = cv2.erode(
+        src=dilate_start,
+        kernel= kernel_erode_vertical,
+        iterations = 1
+    )
+    kernel_erode_vertical_thin_line = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(8, 1)
+    )
+    erode_vertical_after_thin_line = cv2.erode(
+        src=erode_vertical,
+        kernel= kernel_erode_vertical_thin_line,
+        iterations = 1
+    )
+
+    kernel_erode_horizontal = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(200, 1)
+    )
+    erode_horizontal = cv2.erode(
+        src=dilate_start,
+        kernel= kernel_erode_horizontal,
+        iterations = 1
+    )
+
+    erodeMerge = erode_horizontal + erode_vertical_after_thin_line
+
+    # Dilate to combine adjacent text contours
+    kernel = cv2.getStructuringElement(
+        shape=cv2.MORPH_RECT,
+        ksize=(50, 9))
+    dilate_end = cv2.dilate(
+        src=erodeMerge,
+        kernel=kernel,
+        iterations=4)
+    log_intermediate_image(img=dilate_end, caption="4_dilateEnd")
 
     # Find contours, highlight text areas, and extract ROIs
-    contours = cv2.findContours(dilate, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = cv2.findContours(dilate_end, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     contours = contours[0] if len(contours) == 2 else contours[1]
     loguru.logger.debug("# contours found = {len}", len=len(contours))
 
@@ -654,3 +745,4 @@ def detect_regions_from_input_document(
     )
 
     return regions
+

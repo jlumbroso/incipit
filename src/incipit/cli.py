@@ -9,7 +9,6 @@ import incipit
 import incipit.processing
 import incipit.heuristics
 
-
 @click.command(
     # Green is the best color in the world.
     cls=click_help_colors.HelpColorsCommand,
@@ -20,8 +19,8 @@ import incipit.heuristics
 @click.option("-c", "--count", is_flag=True, help="Output number of detected systems")
 @click.option("-p", "--pages", type=str, help="List of pages to process (e.g., '0', '0,-1')")
 @click.option("-#", "--systems", type=str, help="List of systems to extract (e.g., '0', '0,-1')")
-@click.option("-h", "--height-threshold", type=float, default=9.0, help="% of height threshold for system detection")
-@click.option("-w", "--width-threshold", type=float, default=70.0, help="% of width threshold for system detection")
+@click.option("-h", "--height-threshold", type=float, default=8.0, help="% of height threshold for system detection")
+@click.option("-w", "--width-threshold", type=float, default=55.0, help="% of width threshold for system detection")
 @click.option("-o", "--output", help="Output file pattern")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Print debug information")
 @click.version_option(incipit.__version__)
@@ -93,7 +92,6 @@ def main(audit, count, pages, systems, height_threshold, width_threshold, output
         "requested pages={pages}; systems={systems}",
         pages=pages, systems=systems,
     )
-
     if count and output is None and systems is None:
         loguru.logger.debug("COUNT method activated")
         systems = incipit.heuristics.detect_staves_from_input_document(

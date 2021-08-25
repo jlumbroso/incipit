@@ -9,8 +9,8 @@ import incipit.processing
 
 def detect_staves_from_input_document(
         input_path: str,
-        width_proportion: float = 70.0,
-        height_proportion: float = 9.0,
+        width_proportion: float = 55.0,
+        height_proportion: float = 8.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
 ) -> typing.List[incipit.processing.IndexedRegion]:
 
@@ -45,8 +45,8 @@ def detect_staves_from_input_document(
 def write_staff_detection_images_from_input_document(
         input_path: str,
         output_filename_pattern: str,
-        width_proportion: float = 70.0,
-        height_proportion: float = 9.0,
+        width_proportion: float = 55.0,
+        height_proportion: float = 8.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
 ) -> typing.List[str]:
 
@@ -77,10 +77,11 @@ def extract_staves_from_input_document(
         input_path: str,
         output_filename_pattern: typing.Optional[str] = None,
         staves_to_keep: typing.Optional[typing.List[int]] = None,
-        width_proportion: float = 70.0,
-        height_proportion: float = 9.0,
+        width_proportion: float = 55.0,
+        height_proportion: float = 8.0,
         page_numbers_to_keep: typing.Optional[typing.List[int]] = None,
 ) -> typing.Union[
+
         typing.List[incipit.processing.Image],
         typing.List[typing.Tuple[str, incipit.processing.Image]],
 ]:
